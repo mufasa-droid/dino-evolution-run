@@ -1,7 +1,13 @@
-import { CACTUS_DIMENSIONS, CACTUS_VARIANTS, DEFAULT_RUNNER_CONFIG } from './constants.ts';
+import { DEFAULT_RUNNER_CONFIG } from './constants.ts';
+import {
+  computeCurrentSpeed,
+  computeDifficultyFactor,
+  computeSafeReactionGap,
+  selectSpawnPattern,
+  spawnPatternObstacles,
+} from './spawner.ts';
 import type {
-  CactusObstacle,
-  CactusVariant,
+  Obstacle,
   RunnerConfig,
   RunnerInput,
   RunnerState,
@@ -19,24 +25,25 @@ function rectsOverlap(a: Rect, b: Rect): boolean {
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
-function pickRandomVariant(rng: () => number): CactusVariant {
-  const index = Math.floor(rng() * CACTUS_VARIANTS.length);
-  const clamped = Math.max(0, Math.min(CACTUS_VARIANTS.length - 1, index));
-  const variant = CACTUS_VARIANTS[clamped];
-  return variant ?? 'small';
-}
-
-function computeSpawnInterval(config: RunnerConfig, rng: () => number): number {
-  const span = config.maxSpawnInterval - config.minSpawnInterval;
-  return config.minSpawnInterval + rng() * span;
+function isTrexOverGap(state: RunnerState): boolean {
+  const footCenterX = state.trex.x + state.trex.width * 0.5;
+  for (const obstacle of state.obstacles) {
+    if (obstacle.kind !== 'gap') {
+      continue;
+    }
+    // Slight edge forgiveness so landing on the lip doesn't feel unfair
+    if (footCenterX > obstacle.x + 8 && footCenterX < obstacle.x + obstacle.width - 8) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
- * Creates a fresh Phase 3 runner state with T-Rex grounded at the starting line.
+ * Creates a fresh Phase 4 runner state with T-Rex grounded at the starting line.
  */
 export function createRunnerState(
   config: RunnerConfig = DEFAULT_RUNNER_CONFIG,
-  rng: () => number = Math.random,
 ): RunnerState {
   return {
     status: 'running',
@@ -47,11 +54,13 @@ export function createRunnerState(
       width: config.trexWidth,
       height: config.trexHeight,
       isGrounded: true,
+      isFallingInGap: false,
     },
     obstacles: [],
     nextObstacleId: 1,
-    spawnTimer: computeSpawnInterval(config, rng),
+    distanceToNextSpawn: computeSafeReactionGap(config.baseSpeed, 0, config),
     speed: config.baseSpeed,
+    difficulty: 0,
     distance: 0,
     score: 0,
     groundOffset: 0,
@@ -77,13 +86,23 @@ export function stepRunnerSimulation(
     return { jumped: false, collided: false };
   }
 
+  state.difficulty = computeDifficultyFactor(state.distance, config);
+  state.speed = computeCurrentSpeed(state.difficulty, config);
+
   let jumped = false;
 
-  // Jump only when grounded (prevents infinite mid-air jumping)
-  if (input.jumpPressed && state.trex.isGrounded) {
+  // Jump only when grounded and not already falling into a gap
+  if (input.jumpPressed && state.trex.isGrounded && !state.trex.isFallingInGap) {
     state.trex.vy = config.jumpVelocity;
     state.trex.isGrounded = false;
     jumped = true;
+  }
+
+  const overGap = isTrexOverGap(state);
+
+  if (state.trex.isGrounded && overGap) {
+    state.trex.isGrounded = false;
+    state.trex.isFallingInGap = true;
   }
 
   // Vertical kinematics
@@ -92,9 +111,17 @@ export function stepRunnerSimulation(
     state.trex.y += state.trex.vy * dt;
 
     if (state.trex.y >= config.groundY) {
-      state.trex.y = config.groundY;
-      state.trex.vy = 0;
-      state.trex.isGrounded = true;
+      if (!overGap && !state.trex.isFallingInGap) {
+        state.trex.y = config.groundY;
+        state.trex.vy = 0;
+        state.trex.isGrounded = true;
+      } else {
+        state.trex.isFallingInGap = true;
+        if (state.trex.y >= config.groundY + config.gapFallThreshold) {
+          state.status = 'gameover';
+          return { jumped, collided: true };
+        }
+      }
     }
   }
 
@@ -104,35 +131,37 @@ export function stepRunnerSimulation(
   state.distance += dx / config.pixelsPerMeter;
   state.score = Math.floor(state.distance * config.scorePerMeter);
 
-  // Move existing obstacles and prune off-screen ones
-  const activeObstacles: CactusObstacle[] = [];
+  // Move existing obstacles (birds include conservative speedOffset) and prune off-screen ones
+  const activeObstacles: Obstacle[] = [];
   for (const obstacle of state.obstacles) {
-    obstacle.x -= dx;
-    if (obstacle.x + obstacle.width > -60) {
+    obstacle.x -= (state.speed + obstacle.speedOffset) * dt;
+    if (obstacle.x + obstacle.width > -80) {
       activeObstacles.push(obstacle);
     }
   }
   state.obstacles = activeObstacles;
 
-  // Spawn new cactus when timer expires
-  state.spawnTimer -= dt;
-  if (state.spawnTimer <= 0) {
-    const variant = pickRandomVariant(rng);
-    const dims = CACTUS_DIMENSIONS[variant];
-    const newObstacle: CactusObstacle = {
-      id: state.nextObstacleId,
-      variant,
-      x: config.worldWidth + 40,
-      y: config.groundY,
-      width: dims.width,
-      height: dims.height,
-    };
-    state.nextObstacleId += 1;
-    state.obstacles.push(newObstacle);
-    state.spawnTimer = computeSpawnInterval(config, rng);
+  // Spawn next obstacle pattern when distance threshold is reached
+  state.distanceToNextSpawn -= dx;
+  if (state.distanceToNextSpawn <= 0) {
+    const pattern = selectSpawnPattern(state.difficulty, rng);
+    const batch = spawnPatternObstacles(
+      pattern,
+      config.worldWidth + 40,
+      state.nextObstacleId,
+      state.speed,
+      state.difficulty,
+      config,
+      rng,
+    );
+    state.nextObstacleId = batch.nextObstacleId;
+    state.distanceToNextSpawn = batch.distanceToNextSpawn;
+    for (const obs of batch.obstacles) {
+      state.obstacles.push(obs);
+    }
   }
 
-  // Forgiving AABB collision check
+  // Forgiving AABB collision check against solid/aerial/branch hazards
   const trexRect: Rect = {
     left: state.trex.x + config.hitboxPaddingX,
     right: state.trex.x + state.trex.width - config.hitboxPaddingX,
@@ -141,11 +170,14 @@ export function stepRunnerSimulation(
   };
 
   for (const obstacle of state.obstacles) {
+    if (obstacle.kind === 'gap') {
+      continue;
+    }
     const obstacleRect: Rect = {
       left: obstacle.x + 2,
       right: obstacle.x + obstacle.width - 2,
       top: obstacle.y - obstacle.height + 2,
-      bottom: obstacle.y,
+      bottom: obstacle.y - 2,
     };
     if (rectsOverlap(trexRect, obstacleRect)) {
       state.status = 'gameover';

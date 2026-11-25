@@ -3,13 +3,13 @@ import * as Phaser from 'phaser';
 import {
   ANIMATION_KEYS,
   TEXTURE_KEYS,
-  getCactusTextureKey,
-} from '../assets/proceduralTextures';
-import { DEFAULT_RUNNER_CONFIG, GROUND_Y } from '../game/constants';
-import { createRunnerState, stepRunnerSimulation } from '../game/simulation';
-import type { CactusObstacle, GameOverData, RunnerState } from '../game/types';
-import { computeWorldViewport } from '../game/viewport';
-import { attachResponsiveResize } from './sceneResize';
+  getObstacleTextureKey,
+} from '../assets/proceduralTextures.ts';
+import { DEFAULT_RUNNER_CONFIG, GROUND_Y } from '../game/constants.ts';
+import { createRunnerState, stepRunnerSimulation } from '../game/simulation.ts';
+import type { GameOverData, Obstacle, RunnerState } from '../game/types.ts';
+import { computeWorldViewport } from '../game/viewport.ts';
+import { attachResponsiveResize } from './sceneResize.ts';
 
 export class Game extends Scene {
   private runnerState: RunnerState | null = null;
@@ -19,8 +19,8 @@ export class Game extends Scene {
   private groundTile: Phaser.GameObjects.TileSprite | null = null;
   private groundLine: Phaser.GameObjects.Rectangle | null = null;
   private trexSprite: Phaser.GameObjects.Sprite | null = null;
-  private obstacleSprites: Map<number, Phaser.GameObjects.Image> = new Map();
-  private obstaclePool: Phaser.GameObjects.Image[] = [];
+  private obstacleSprites: Map<number, Phaser.GameObjects.Sprite> = new Map();
+  private obstaclePool: Phaser.GameObjects.Sprite[] = [];
 
   private scoreText: Phaser.GameObjects.Text | null = null;
   private distanceText: Phaser.GameObjects.Text | null = null;
@@ -67,15 +67,18 @@ export class Game extends Scene {
     // World objects (rendered by worldCamera only)
     this.groundTile = this.add
       .tileSprite(-400, GROUND_Y, 2400, 600, TEXTURE_KEYS.groundTile)
-      .setOrigin(0, 0);
+      .setOrigin(0, 0)
+      .setDepth(0);
 
     this.groundLine = this.add
       .rectangle(-400, GROUND_Y, 2400, 4, 0x534b3b)
-      .setOrigin(0, 0);
+      .setOrigin(0, 0)
+      .setDepth(1);
 
     this.trexSprite = this.add
       .sprite(state.trex.x, state.trex.y, TEXTURE_KEYS.trexRun0)
-      .setOrigin(0, 1);
+      .setOrigin(0, 1)
+      .setDepth(4);
     this.trexSprite.play(ANIMATION_KEYS.trexRun);
 
     this.worldObjects = [this.groundTile, this.groundLine, this.trexSprite];
@@ -217,36 +220,54 @@ export class Game extends Scene {
     }
   }
 
-  private syncObstacles(obstacles: readonly CactusObstacle[]): void {
+  private configureObstacleSprite(
+    sprite: Phaser.GameObjects.Sprite,
+    obs: Obstacle,
+  ): void {
+    sprite.stop();
+    sprite.setTexture(getObstacleTextureKey(obs.typeId));
+
+    if (obs.kind === 'gap') {
+      sprite.setOrigin(0, 0);
+      sprite.setDisplaySize(obs.width, 600);
+      sprite.setDepth(2);
+    } else {
+      sprite.setOrigin(0, 1);
+      sprite.setScale(1, 1);
+      sprite.setDepth(3);
+      if (obs.kind === 'bird') {
+        sprite.play(ANIMATION_KEYS.birdFlap);
+      }
+    }
+  }
+
+  private syncObstacles(obstacles: readonly Obstacle[]): void {
     const activeIds = new Set<number>();
     for (const obs of obstacles) {
       activeIds.add(obs.id);
     }
 
-    // Recycle sprites for obstacles that left the screen
     for (const [id, sprite] of this.obstacleSprites.entries()) {
       if (!activeIds.has(id)) {
+        sprite.stop();
         sprite.setVisible(false);
         this.obstaclePool.push(sprite);
         this.obstacleSprites.delete(id);
       }
     }
 
-    // Position or acquire sprites for active obstacles
     for (const obs of obstacles) {
       let sprite = this.obstacleSprites.get(obs.id);
       if (!sprite) {
         const pooled = this.obstaclePool.pop();
         if (pooled) {
           sprite = pooled;
-          sprite.setTexture(getCactusTextureKey(obs.variant));
           sprite.setVisible(true);
         } else {
-          sprite = this.add
-            .image(obs.x, obs.y, getCactusTextureKey(obs.variant))
-            .setOrigin(0, 1);
+          sprite = this.add.sprite(obs.x, obs.y, getObstacleTextureKey(obs.typeId));
           this.hudCamera?.ignore(sprite);
         }
+        this.configureObstacleSprite(sprite, obs);
         this.obstacleSprites.set(obs.id, sprite);
       }
       sprite.setPosition(obs.x, obs.y);

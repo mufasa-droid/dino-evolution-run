@@ -37,12 +37,12 @@
 ---
 
 ## Phase 4 — Obstacle and Spawning System
-**Status:** Pending
-- [ ] Implement reusable obstacle configurations (cactus, rocks, flying birds, low branches, ground gaps).
-- [ ] Support fair obstacle combinations and configurable spawn intervals.
-- [ ] Implement spawn difficulty scaling without unavoidable obstacle overlaps.
-- [ ] Add obstacle cleanup and object pooling to prevent memory leaks.
-- [ ] Add unit tests for spawner fairness and interval calculations.
+**Status:** Completed
+- [x] Implement reusable obstacle configurations (cactus, rocks, flying birds, low branches, ground gaps).
+- [x] Support fair obstacle combinations and configurable spawn intervals.
+- [x] Implement spawn difficulty scaling without unavoidable obstacle overlaps.
+- [x] Add obstacle cleanup and object pooling to prevent memory leaks.
+- [x] Add unit tests for spawner fairness and interval calculations.
 
 ---
 

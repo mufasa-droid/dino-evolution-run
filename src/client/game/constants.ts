@@ -1,4 +1,4 @@
-import type { CactusVariant, RunnerConfig } from './types.ts';
+import type { RunnerConfig } from './types.ts';
 
 export const WORLD_WIDTH = 960;
 export const WORLD_HEIGHT = 540;
@@ -15,26 +15,14 @@ export const DEFAULT_RUNNER_CONFIG: RunnerConfig = {
   jumpVelocity: -700,
   gravity: 2000,
   baseSpeed: 380,
+  maxSpeed: 540,
+  difficultyDistanceForMax: 2400,
   pixelsPerMeter: 24,
   scorePerMeter: 10,
-  minSpawnInterval: 0.95,
-  maxSpawnInterval: 1.85,
+  minSpawnGapMultiplier: 1.0,
+  maxSpawnGapMultiplier: 1.65,
+  gapFallThreshold: 48,
   maxDeltaSeconds: 0.05,
   hitboxPaddingX: 6,
   hitboxPaddingY: 5,
 };
-
-export const CACTUS_DIMENSIONS: Record<
-  CactusVariant,
-  { readonly width: number; readonly height: number }
-> = {
-  small: { width: 24, height: 42 },
-  tall: { width: 32, height: 62 },
-  cluster: { width: 54, height: 46 },
-};
-
-export const CACTUS_VARIANTS: readonly CactusVariant[] = [
-  'small',
-  'tall',
-  'cluster',
-];

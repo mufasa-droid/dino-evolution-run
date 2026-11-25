@@ -236,7 +236,7 @@ This phase must produce a stable playable prototype.
 
 ## PHASE 4 — OBSTACLE AND SPAWNING SYSTEM
 
-**Status:** Pending
+**Status:** Completed
 
 ### Objective
 Create a reusable obstacle generation system.
