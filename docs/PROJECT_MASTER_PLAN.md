@@ -269,7 +269,7 @@ Create a reusable obstacle generation system.
 
 ## PHASE 5 — TRANSFORMATION SYSTEM
 
-**Status:** Pending
+**Status:** Completed
 
 ### Objective
 Introduce the evolution orb and temporary dinosaur transformations.
@@ -303,7 +303,7 @@ Introduce the evolution orb and temporary dinosaur transformations.
 
 ## PHASE 6 — DINOSAUR ABILITIES
 
-**Status:** Pending
+**Status:** Completed
 
 ### Objective
 Implement the unique gameplay abilities of each dinosaur.

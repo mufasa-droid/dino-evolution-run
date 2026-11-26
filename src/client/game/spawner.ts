@@ -1,5 +1,12 @@
+import { getEnvironmentPatternWeight } from './environments.ts';
 import { OBSTACLE_CATALOG, SPAWN_PATTERNS } from './obstacles.ts';
-import type { Obstacle, RunnerConfig, SpawnPattern } from './types.ts';
+import type {
+  EnvironmentId,
+  EvolutionOrb,
+  Obstacle,
+  RunnerConfig,
+  SpawnPattern,
+} from './types.ts';
 
 /**
  * Computes normalized difficulty in [0, 1] from distance traveled.
@@ -60,24 +67,25 @@ export function computeSafeReactionGap(
 }
 
 /**
- * Selects an eligible spawn pattern weighted by config at the current difficulty.
+ * Selects an eligible spawn pattern weighted by config and environment at the current difficulty.
  */
 export function selectSpawnPattern(
   difficulty: number,
   rng: () => number,
   patterns: readonly SpawnPattern[] = SPAWN_PATTERNS,
+  environmentId: EnvironmentId = 'desert',
 ): SpawnPattern {
   const eligible = patterns.filter((p) => p.minDifficulty <= difficulty);
   const pool = eligible.length > 0 ? eligible : patterns;
 
   let totalWeight = 0;
   for (const pattern of pool) {
-    totalWeight += pattern.weight;
+    totalWeight += getEnvironmentPatternWeight(pattern, environmentId);
   }
 
   let roll = rng() * totalWeight;
   for (const pattern of pool) {
-    roll -= pattern.weight;
+    roll -= getEnvironmentPatternWeight(pattern, environmentId);
     if (roll <= 0) {
       return pattern;
     }
@@ -157,4 +165,118 @@ export function spawnPatternObstacles(
     nextObstacleId: nextId,
     distanceToNextSpawn: patternSpan + minSafeGap * gapMultiplier,
   };
+}
+
+export function computeNextOrbDistance(
+  config: RunnerConfig,
+  rng: () => number,
+): number {
+  const span = config.maxOrbSpawnDistance - config.minOrbSpawnDistance;
+  return config.minOrbSpawnDistance + rng() * span;
+}
+
+function isOrbPathSafe(
+  orbX: number,
+  orbElevation: number,
+  config: RunnerConfig,
+  obstacles: readonly Obstacle[],
+): boolean {
+  const orbW = config.orbWidth;
+  const orbH = config.orbHeight;
+  const orbBottomY = config.groundY - orbElevation;
+  const orbTopY = orbBottomY - orbH;
+
+  const isGroundOrb = orbElevation <= 20;
+  const approachMargin = isGroundOrb ? 95 : 115;
+  const exitMargin = isGroundOrb ? 95 : 145;
+  const pathLeft = orbX - approachMargin;
+  const pathRight = orbX + orbW + exitMargin;
+
+  for (const obs of obstacles) {
+    const obsLeft = obs.x;
+    const obsRight = obs.x + obs.width;
+    const obsBottomY = obs.y;
+    const obsTopY = obs.y - obs.height;
+
+    // Never spawn an orb whose collection/landing path overlaps a ground gap
+    if (obs.kind === 'gap') {
+      if (pathLeft < obsRight + 40 && pathRight > obsLeft - 40) {
+        return false;
+      }
+      continue;
+    }
+
+    if (isGroundOrb) {
+      // Ground-level orbs are safe only if no ground-blocking hazard is in the path
+      const blocksGround =
+        obs.kind === 'cactus' ||
+        obs.kind === 'rock' ||
+        obs.typeId === 'bird_low';
+      if (blocksGround && pathLeft < obsRight && pathRight > obsLeft) {
+        return false;
+      }
+    } else {
+      // Jump-arc orbs require clear takeoff/landing zones, vertical clearance above any ground obstacle underneath, and clear air space
+      const takeoffLeft = orbX - 140;
+      const takeoffRight = orbX - 35;
+      const landingLeft = orbX + orbW + 35;
+      const landingRight = orbX + orbW + 140;
+
+      if (obs.kind === 'cactus' || obs.kind === 'rock') {
+        const inTakeoff = takeoffLeft < obsRight && takeoffRight > obsLeft;
+        const inLanding = landingLeft < obsRight && landingRight > obsLeft;
+        if (inTakeoff || inLanding) {
+          return false;
+        }
+        // If underneath the orb's arc, require sufficient vertical clearance above the obstacle
+        const underArc = orbX - 35 < obsRight && orbX + orbW + 35 > obsLeft;
+        if (underArc && obsTopY < orbBottomY + 14) {
+          return false;
+        }
+      }
+
+      // Check vertical + horizontal clearance against aerial/overhead hazards
+      const airHorizOverlap =
+        orbX - 70 < obsRight && orbX + orbW + 70 > obsLeft;
+      const airVertOverlap =
+        orbTopY - 24 < obsBottomY && orbBottomY + 24 > obsTopY;
+      if (airHorizOverlap && airVertOverlap) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Attempts to spawn an evolution orb along a verified fair collection path.
+ * Returns null if no safe position exists (caller should skip rather than force).
+ */
+export function tryCreateSafeOrb(
+  spawnX: number,
+  orbId: number,
+  config: RunnerConfig,
+  obstacles: readonly Obstacle[],
+): EvolutionOrb | null {
+  const candidates: ReadonlyArray<{ readonly xOffset: number; readonly elevation: number }> = [
+    { xOffset: 0, elevation: 12 },
+    { xOffset: 0, elevation: 66 },
+    { xOffset: 150, elevation: 12 },
+  ];
+
+  for (const candidate of candidates) {
+    const candidateX = spawnX + candidate.xOffset;
+    if (isOrbPathSafe(candidateX, candidate.elevation, config, obstacles)) {
+      return {
+        id: orbId,
+        x: candidateX,
+        y: config.groundY - candidate.elevation,
+        width: config.orbWidth,
+        height: config.orbHeight,
+      };
+    }
+  }
+
+  return null;
 }

@@ -47,25 +47,25 @@
 ---
 
 ## Phase 5 — Transformation System
-**Status:** Pending
-- [ ] Implement evolution orb entity and orb spawning.
-- [ ] Implement orb collection and pure transformation state management.
-- [ ] Implement dinosaur species switching and adaptive collision hitboxes.
-- [ ] Implement ~10-second transformation countdown, 3-second visual warning, and expiration back to T-Rex.
-- [ ] Handle consecutive transformations while avoiding immediate species repetition where possible.
-- [ ] Add transformation visual effects and transformation HUD timer.
-- [ ] Add unit tests for transformation timers, state transitions, and edge cases.
+**Status:** Completed
+- [x] Implement evolution orb entity and orb spawning.
+- [x] Implement orb collection and pure transformation state management.
+- [x] Implement dinosaur species switching and adaptive collision hitboxes.
+- [x] Implement ~10-second transformation countdown, 3-second visual warning, and expiration back to T-Rex.
+- [x] Handle consecutive transformations while avoiding immediate species repetition where possible.
+- [x] Add transformation visual effects and transformation HUD timer.
+- [x] Add unit tests for transformation timers, state transitions, and edge cases.
 
 ---
 
 ## Phase 6 — Dinosaur Abilities
-**Status:** Pending
-- [ ] **T-Rex**: Jumping, jump animation, and landing animation.
-- [ ] **Pterodactyl**: Tap-and-hold low-glide movement, glide animation, and aerial collision handling.
-- [ ] **Triceratops**: Tap forward charge, destructible obstacle interaction, charge animation, duration, and cooldown.
-- [ ] **Ankylosaurus**: Tap temporary armour activation, single fatal-collision protection, armour VFX, and cooldown.
-- [ ] Ensure each dinosaur has distinct configurable movement tuning and visual feedback.
-- [ ] Add unit tests for ability cooldowns, durations, and obstacle interactions.
+**Status:** Completed
+- [x] **T-Rex**: Jumping, jump animation, and landing animation.
+- [x] **Pterodactyl**: Tap-and-hold low-glide movement, glide animation, and aerial collision handling.
+- [x] **Triceratops**: Tap forward charge, destructible obstacle interaction, charge animation, duration, and cooldown.
+- [x] **Ankylosaurus**: Tap temporary armour activation, single fatal-collision protection, armour VFX, and cooldown.
+- [x] Ensure each dinosaur has distinct configurable movement tuning and visual feedback.
+- [x] Add unit tests for ability cooldowns, durations, and obstacle interactions.
 
 ---
 

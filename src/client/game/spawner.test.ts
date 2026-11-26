@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { DEFAULT_RUNNER_CONFIG } from './constants.ts';
 import { OBSTACLE_CATALOG, SPAWN_PATTERNS } from './obstacles.ts';
+import { DINOSAUR_SPECS } from './species.ts';
 import {
   computeCurrentSpeed,
   computeDifficultyFactor,
@@ -98,7 +99,7 @@ void describe('Phase 4 Obstacle & Pattern Spawner', () => {
         // Overhead obstacles (low_branch, bird_high) must leave T-Rex clearance underneath
         if (current.kind === 'branch' || current.typeId === 'bird_high') {
           const clearanceUnder = DEFAULT_RUNNER_CONFIG.groundY - current.y;
-          assert.ok(clearanceUnder > DEFAULT_RUNNER_CONFIG.trexHeight);
+          assert.ok(clearanceUnder > DINOSAUR_SPECS.trex.visualHeight);
         }
 
         const next = sorted[i + 1];
