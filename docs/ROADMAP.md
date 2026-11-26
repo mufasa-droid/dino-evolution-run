@@ -80,13 +80,13 @@
 ---
 
 ## Phase 8 — User Interface, Animation and Audio
-**Status:** Pending
-- [ ] Build minimalist start screen (`MainMenu`) and responsive `Preloader` backed by typed asset manifest.
-- [ ] Build responsive gameplay HUD (score, distance, dinosaur indicator, transformation timer).
-- [ ] Build game-over screen with personal best display and restart button.
-- [ ] Add sound effects (jump, land, orb, transform, ability, collision) and optional background audio with mute control.
-- [ ] Add particle effects, transformation animations, and subtle screen feedback.
-- [ ] Customize `splash.html` / `splash.css` / `splash.ts` for Dinosaur Evolution Runner.
+**Status:** Completed
+- [x] Build minimalist start screen (`MainMenu`) and responsive `Preloader` backed by typed asset manifest.
+- [x] Build responsive gameplay HUD (score, distance, dinosaur indicator, transformation timer).
+- [x] Build game-over screen with personal best display and restart button.
+- [x] Add sound effects (jump, land, orb, transform, ability, collision) and optional background audio with mute control.
+- [x] Add particle effects, transformation animations, and subtle screen feedback.
+- [x] Customize `splash.html` / `splash.css` / `splash.ts` for Dinosaur Evolution Runner.
 
 ---
 

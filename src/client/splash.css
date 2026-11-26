@@ -4,25 +4,23 @@
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
     Arial, sans-serif;
-  color: #000000;
 }
 
 .app {
   display: flex;
-  position: relative;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   height: 100vh;
-  margin: 0;
+  padding: 20px;
   gap: 16px;
+  background-color: #f5efe0;
+  color: #2d4a3e;
 }
 
-.snoo {
-  object-fit: contain;
-  width: 50%;
-  max-width: 250px;
-  margin: 0 auto;
+.badge {
+  font-size: 2.8rem;
+  line-height: 1;
 }
 
 .content {
@@ -30,57 +28,45 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  max-width: 360px;
 }
 
 .title {
-  font-size: 1.5em;
-  font-weight: bold;
+  font-size: 1.45em;
+  font-weight: 800;
   text-align: center;
+  color: #2d4a3e;
 }
 
 .description {
-  font-size: 1em;
+  font-size: 0.95em;
+  line-height: 1.4;
   text-align: center;
-  color: #5c6c74;
+  color: #534b3b;
 }
 
-.code {
-  background-color: #e5ebee;
-  padding: 2px 4px;
-  border-radius: 4px;
+.greeting {
+  font-size: 0.85em;
+  color: #6b655c;
+  text-align: center;
 }
 
 .start-button {
-  background-color: #d93900;
+  background-color: #2d4a3e;
   color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
   border: none;
-  padding: 6px 16px;
-  height: 28px;
-  font-size: 1.1em;
-  border-radius: 12px;
+  padding: 12px 34px;
+  font-size: 1.05em;
+  font-weight: 700;
+  border-radius: 999px;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.15s ease, transform 0.1s ease;
 }
 
-.footer {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 12px;
-  font-size: 0.8em;
-  color: #666666;
+.start-button:hover {
+  background-color: #21382e;
 }
 
-.docs-link {
-  cursor: pointer;
-}
-
-.divider {
-  color: rgba(0, 0, 0, 0.1);
+.start-button:active {
+  transform: scale(0.97);
 }

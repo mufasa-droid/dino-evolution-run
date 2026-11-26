@@ -1,12 +1,12 @@
 import { Scene } from 'phaser';
 import * as Phaser from 'phaser';
-import { ensureProceduralTextures } from '../assets/proceduralTextures';
-import { attachResponsiveResize } from './sceneResize';
+import { ensureProceduralTextures } from '../assets/proceduralTextures.ts';
+import { attachResponsiveResize } from './sceneResize.ts';
 
 export class Preloader extends Scene {
-  private background: Phaser.GameObjects.Image | null = null;
   private barOutline: Phaser.GameObjects.Rectangle | null = null;
   private barFill: Phaser.GameObjects.Rectangle | null = null;
+  private labelText: Phaser.GameObjects.Text | null = null;
   private currentProgress = 0;
 
   constructor() {
@@ -14,18 +14,28 @@ export class Preloader extends Scene {
   }
 
   init(): void {
-    this.background = null;
     this.barOutline = null;
     this.barFill = null;
+    this.labelText = null;
     this.currentProgress = 0;
 
-    this.background = this.add.image(0, 0, 'background').setOrigin(0);
+    this.cameras.main.setBackgroundColor(0xf5efe0);
+
+    this.labelText = this.add
+      .text(0, 0, 'LOADING...', {
+        fontFamily: 'Arial Black, sans-serif',
+        fontSize: '18px',
+        color: '#2d4a3e',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+
     this.barOutline = this.add
-      .rectangle(0, 0, 320, 28)
+      .rectangle(0, 0, 320, 26)
       .setStrokeStyle(2, 0x2d4a3e)
       .setOrigin(0.5);
     this.barFill = this.add
-      .rectangle(0, 0, 4, 22, 0x2d4a3e)
+      .rectangle(0, 0, 4, 20, 0x2d4a3e)
       .setOrigin(0, 0.5);
 
     this.updateLayout(this.scale.width, this.scale.height);
@@ -65,14 +75,14 @@ export class Preloader extends Scene {
   private updateLayout(width: number, height: number): void {
     this.cameras.resize(width, height);
 
-    if (this.background) {
-      this.background.setDisplaySize(width, height);
+    if (this.labelText) {
+      this.labelText.setPosition(width / 2, height / 2 - 34);
     }
 
-    const barWidth = Math.min(468, Math.max(220, width * 0.7));
+    const barWidth = Math.min(420, Math.max(200, width * 0.68));
     if (this.barOutline) {
       this.barOutline.setPosition(width / 2, height / 2);
-      this.barOutline.setSize(barWidth, 28);
+      this.barOutline.setSize(barWidth, 26);
     }
     if (this.barFill) {
       this.barFill.setPosition(width / 2 - barWidth / 2 + 4, height / 2);

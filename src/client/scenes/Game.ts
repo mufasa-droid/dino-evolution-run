@@ -12,6 +12,14 @@ import {
   ENVIRONMENT_CONFIGS,
   lerpEnvironmentPalette,
 } from '../game/environments.ts';
+import { computeHudLayout } from '../game/hudLayout.ts';
+import {
+  clearParticlePool,
+  createParticlePool,
+  emitParticleBurst,
+  stepParticlePool,
+  type ParticlePool,
+} from '../game/particles.ts';
 import { createRunnerState, stepRunnerSimulation } from '../game/simulation.ts';
 import { DINOSAUR_SPECS } from '../game/species.ts';
 import type {
@@ -22,6 +30,7 @@ import type {
   RunnerState,
 } from '../game/types.ts';
 import { computeWorldViewport } from '../game/viewport.ts';
+import { audioService } from '../services/audio.ts';
 import { attachResponsiveResize } from './sceneResize.ts';
 
 function isJumpKeyCode(code: string): boolean {
@@ -37,6 +46,8 @@ function isAbilityKeyCode(code: string): boolean {
     code === 'KeyS'
   );
 }
+
+const PARTICLE_POOL_CAPACITY = 32;
 
 export class Game extends Scene {
   private runnerState: RunnerState | null = null;
@@ -55,8 +66,13 @@ export class Game extends Scene {
   private orbSprites: Map<number, Phaser.GameObjects.Image> = new Map();
   private orbPool: Phaser.GameObjects.Image[] = [];
 
+  private particlePool: ParticlePool = createParticlePool(PARTICLE_POOL_CAPACITY);
+  private particleRects: Phaser.GameObjects.Rectangle[] = [];
+
   private scoreText: Phaser.GameObjects.Text | null = null;
   private distanceText: Phaser.GameObjects.Text | null = null;
+  private muteButtonBg: Phaser.GameObjects.Rectangle | null = null;
+  private muteButtonText: Phaser.GameObjects.Text | null = null;
   private speciesText: Phaser.GameObjects.Text | null = null;
   private timerBarBg: Phaser.GameObjects.Rectangle | null = null;
   private timerBarFill: Phaser.GameObjects.Rectangle | null = null;
@@ -64,6 +80,7 @@ export class Game extends Scene {
   private abilityButtonBg: Phaser.GameObjects.Rectangle | null = null;
   private abilityButtonText: Phaser.GameObjects.Text | null = null;
   private lastAbilityButtonLabel = '';
+  private lastAbilityVisible = false;
   private envBannerText: Phaser.GameObjects.Text | null = null;
   private hintText: Phaser.GameObjects.Text | null = null;
   private hudObjects: Phaser.GameObjects.GameObject[] = [];
@@ -78,9 +95,10 @@ export class Game extends Scene {
   private jumpQueued = false;
   private jumpHeld = false;
   private abilityQueued = false;
-  private abilityPointerActive = false;
+  private hudPointerActive = false;
   private heldJumpKeys: Set<string> = new Set();
   private hasJumpedOnce = false;
+  private wasAirborne = false;
   private transformFlashTimer = 0;
 
   constructor() {
@@ -102,8 +120,12 @@ export class Game extends Scene {
     this.obstaclePool = [];
     this.orbSprites.clear();
     this.orbPool = [];
+    clearParticlePool(this.particlePool);
+    this.particleRects = [];
     this.scoreText = null;
     this.distanceText = null;
+    this.muteButtonBg = null;
+    this.muteButtonText = null;
     this.speciesText = null;
     this.timerBarBg = null;
     this.timerBarFill = null;
@@ -111,6 +133,7 @@ export class Game extends Scene {
     this.abilityButtonBg = null;
     this.abilityButtonText = null;
     this.lastAbilityButtonLabel = '';
+    this.lastAbilityVisible = false;
     this.envBannerText = null;
     this.hintText = null;
     this.hudObjects = [];
@@ -123,9 +146,10 @@ export class Game extends Scene {
     this.jumpQueued = false;
     this.jumpHeld = false;
     this.abilityQueued = false;
-    this.abilityPointerActive = false;
+    this.hudPointerActive = false;
     this.heldJumpKeys.clear();
     this.hasJumpedOnce = false;
+    this.wasAirborne = false;
     this.transformFlashTimer = 0;
   }
 
@@ -192,11 +216,20 @@ export class Game extends Scene {
       this.chargeAuraSprite,
     ];
 
+    for (let i = 0; i < PARTICLE_POOL_CAPACITY; i += 1) {
+      const rect = this.add
+        .rectangle(0, 0, 4, 4, 0xffffff)
+        .setDepth(5)
+        .setVisible(false);
+      this.particleRects.push(rect);
+      this.worldObjects.push(rect);
+    }
+
     // HUD objects (rendered by hudCamera only)
     this.scoreText = this.add
       .text(0, 0, 'SCORE 00000', {
         fontFamily: 'Arial Black, sans-serif',
-        fontSize: '22px',
+        fontSize: '20px',
         color: '#2d4a3e',
         align: 'right',
       })
@@ -205,16 +238,31 @@ export class Game extends Scene {
     this.distanceText = this.add
       .text(0, 0, '0 m', {
         fontFamily: 'Arial, sans-serif',
-        fontSize: '16px',
+        fontSize: '15px',
         color: '#534b3b',
         align: 'right',
       })
       .setOrigin(1, 0);
 
+    this.muteButtonBg = this.add
+      .rectangle(0, 0, 76, 24, 0xe8dfc8)
+      .setOrigin(1, 0)
+      .setStrokeStyle(1.5, 0x534b3b)
+      .setInteractive({ useHandCursor: true });
+
+    this.muteButtonText = this.add
+      .text(0, 0, audioService.isMuted() ? 'MUTED' : 'SOUND', {
+        fontFamily: 'Arial Black, sans-serif',
+        fontSize: '11px',
+        color: '#2d4a3e',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+
     this.speciesText = this.add
       .text(0, 0, 'T-REX', {
         fontFamily: 'Arial Black, sans-serif',
-        fontSize: '18px',
+        fontSize: '17px',
         color: '#2d4a3e',
         align: 'left',
       })
@@ -233,7 +281,7 @@ export class Game extends Scene {
     this.abilityStatusText = this.add
       .text(0, 0, '', {
         fontFamily: 'Arial, sans-serif',
-        fontSize: '13px',
+        fontSize: '12px',
         color: '#534b3b',
         align: 'left',
       })
@@ -241,7 +289,7 @@ export class Game extends Scene {
       .setVisible(false);
 
     this.abilityButtonBg = this.add
-      .rectangle(0, 0, 148, 44, 0x2d4a3e)
+      .rectangle(0, 0, 142, 42, 0x2d4a3e)
       .setOrigin(1, 1)
       .setStrokeStyle(2, 0xffffff)
       .setInteractive({ useHandCursor: true })
@@ -272,7 +320,7 @@ export class Game extends Scene {
     this.hintText = this.add
       .text(0, 0, 'Tap or Press Space to Jump', {
         fontFamily: 'Arial, sans-serif',
-        fontSize: '16px',
+        fontSize: '15px',
         color: '#534b3b',
         align: 'center',
       })
@@ -281,6 +329,8 @@ export class Game extends Scene {
     this.hudObjects = [
       this.scoreText,
       this.distanceText,
+      this.muteButtonBg,
+      this.muteButtonText,
       this.speciesText,
       this.timerBarBg,
       this.timerBarFill,
@@ -299,7 +349,6 @@ export class Game extends Scene {
       this.updateLayout(width, height);
     });
 
-    // Dedicated mobile/touch Ability button (never triggers Jump)
     const handleAbilityButtonDown = (
       _pointer: Phaser.Input.Pointer,
       _localX: number,
@@ -307,31 +356,48 @@ export class Game extends Scene {
       event: Phaser.Types.Input.EventData,
     ) => {
       event.stopPropagation();
-      this.abilityPointerActive = true;
+      audioService.unlock();
+      this.hudPointerActive = true;
       this.abilityQueued = true;
     };
 
+    const handleMuteButtonDown = (
+      _pointer: Phaser.Input.Pointer,
+      _localX: number,
+      _localY: number,
+      event: Phaser.Types.Input.EventData,
+    ) => {
+      event.stopPropagation();
+      audioService.unlock();
+      this.hudPointerActive = true;
+      const muted = audioService.toggleMute();
+      this.muteButtonText?.setText(muted ? 'MUTED' : 'SOUND');
+    };
+
     const handleScenePointerDown = () => {
-      if (this.abilityPointerActive) {
-        this.abilityPointerActive = false;
+      if (this.hudPointerActive) {
+        this.hudPointerActive = false;
         return;
       }
+      audioService.unlock();
       this.jumpQueued = true;
       this.jumpHeld = true;
     };
 
     const handleScenePointerUp = () => {
-      this.abilityPointerActive = false;
+      this.hudPointerActive = false;
       this.jumpHeld = this.heldJumpKeys.size > 0;
     };
 
     this.abilityButtonBg.on('pointerdown', handleAbilityButtonDown);
+    this.muteButtonBg.on('pointerdown', handleMuteButtonDown);
     this.input.on('pointerdown', handleScenePointerDown);
     this.input.on('pointerup', handleScenePointerUp);
     this.input.on('pointerupoutside', handleScenePointerUp);
 
     const keyboard = this.input.keyboard;
     const handleKeyDown = (event: KeyboardEvent) => {
+      audioService.unlock();
       if (isJumpKeyCode(event.code)) {
         event.preventDefault();
         if (!this.heldJumpKeys.has(event.code)) {
@@ -360,7 +426,10 @@ export class Game extends Scene {
     }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      audioService.stopAll();
+      clearParticlePool(this.particlePool);
       this.abilityButtonBg?.off('pointerdown', handleAbilityButtonDown);
+      this.muteButtonBg?.off('pointerdown', handleMuteButtonDown);
       this.input.off('pointerdown', handleScenePointerDown);
       this.input.off('pointerup', handleScenePointerUp);
       this.input.off('pointerupoutside', handleScenePointerUp);
@@ -372,6 +441,7 @@ export class Game extends Scene {
       this.obstaclePool = [];
       this.orbSprites.clear();
       this.orbPool = [];
+      this.particleRects = [];
     });
   }
 
@@ -394,23 +464,79 @@ export class Game extends Scene {
       DEFAULT_RUNNER_CONFIG,
     );
 
-    if (events.jumped && !this.hasJumpedOnce) {
-      this.hasJumpedOnce = true;
-      if (this.hintText) {
-        this.hintText.setVisible(false);
+    if (events.jumped) {
+      audioService.playJump();
+      if (!this.hasJumpedOnce) {
+        this.hasJumpedOnce = true;
+        this.hintText?.setVisible(false);
       }
+    }
+
+    const landedThisFrame =
+      this.wasAirborne && state.player.isGrounded && !state.player.isFallingInGap;
+    this.wasAirborne = !state.player.isGrounded;
+
+    if (landedThisFrame) {
+      audioService.playLand();
+      emitParticleBurst(
+        this.particlePool,
+        state.player.x + state.player.visualWidth * 0.4,
+        state.player.y,
+        4,
+        0xb5a88d,
+        3,
+        0.22,
+      );
     }
 
     if (events.transformedTo !== null || events.transformationExpired) {
       this.transformFlashTimer = 0.25;
+      audioService.playTransform();
+      emitParticleBurst(
+        this.particlePool,
+        state.player.x + state.player.visualWidth * 0.5,
+        state.player.y - state.player.visualHeight * 0.5,
+        7,
+        events.transformedTo !== null ? 0xf59e0b : 0x2d4a3e,
+        5,
+        0.3,
+      );
+    }
+
+    if (events.transformationWarning) {
+      audioService.playWarningTick();
+    }
+
+    if (events.abilityActivated !== null) {
+      audioService.playAbility();
     }
 
     if (events.obstacleDestroyed) {
-      this.worldCamera?.shake(90, 0.005);
+      audioService.playSmash();
+      this.worldCamera?.shake(80, 0.004);
+      emitParticleBurst(
+        this.particlePool,
+        state.player.x + state.player.visualWidth + 8,
+        state.player.y - 18,
+        6,
+        0x9a7b56,
+        5,
+        0.28,
+      );
     }
 
     if (events.armourBlocked) {
-      this.worldCamera?.shake(110, 0.006);
+      audioService.playArmourBlock();
+      this.worldCamera?.shake(90, 0.005);
+      emitParticleBurst(
+        this.particlePool,
+        state.player.x + state.player.visualWidth * 0.6,
+        state.player.y - state.player.visualHeight * 0.5,
+        6,
+        0x38bdf8,
+        4,
+        0.28,
+      );
     }
 
     if (events.environmentChanged !== null) {
@@ -449,9 +575,11 @@ export class Game extends Scene {
       this.transformFlashTimer = Math.max(0, this.transformFlashTimer - dtSeconds);
     }
 
+    stepParticlePool(this.particlePool, dtSeconds);
     this.syncVisuals(state, time);
 
     if (events.collided) {
+      audioService.playGameOver();
       const payload: GameOverData = {
         score: state.score,
         distance: Math.floor(state.distance),
@@ -487,7 +615,7 @@ export class Game extends Scene {
       this.syncPlayerAnimation(state);
 
       if (this.transformFlashTimer > 0) {
-        const pulseScale = 1 + (this.transformFlashTimer / 0.25) * 0.18;
+        const pulseScale = 1 + (this.transformFlashTimer / 0.25) * 0.16;
         this.playerSprite.setScale(pulseScale);
         this.playerSprite.setAlpha(1);
       } else {
@@ -526,9 +654,29 @@ export class Game extends Scene {
       }
     }
 
+    this.syncParticles();
     this.syncObstacles(state.obstacles);
     this.syncOrbs(state.orbs, timeMs);
     this.syncHud(state);
+  }
+
+  private syncParticles(): void {
+    for (let i = 0; i < this.particlePool.slots.length; i += 1) {
+      const slot = this.particlePool.slots[i];
+      const rect = this.particleRects[i];
+      if (!slot || !rect) {
+        continue;
+      }
+      if (!slot.active) {
+        rect.setVisible(false);
+        continue;
+      }
+      rect.setVisible(true);
+      rect.setPosition(slot.x, slot.y);
+      rect.setSize(slot.size, slot.size);
+      rect.setFillStyle(slot.color);
+      rect.setAlpha(Math.max(0.15, slot.life / slot.maxLife));
+    }
   }
 
   private syncPlayerAnimation(state: RunnerState): void {
@@ -619,6 +767,11 @@ export class Game extends Scene {
     const hasActiveButtonSpecies =
       species === 'triceratops' || species === 'ankylosaurus';
 
+    if (hasActiveButtonSpecies !== this.lastAbilityVisible) {
+      this.lastAbilityVisible = hasActiveButtonSpecies;
+      this.updateLayout(this.scale.width, this.scale.height);
+    }
+
     if (this.abilityButtonBg && this.abilityButtonText) {
       this.abilityButtonBg.setVisible(hasActiveButtonSpecies);
       this.abilityButtonText.setVisible(hasActiveButtonSpecies);
@@ -666,15 +819,13 @@ export class Game extends Scene {
       if (species === 'pterodactyl') {
         this.abilityStatusText.setVisible(true);
         this.abilityStatusText.setText(
-          abilities.isGliding ? 'GLIDING (Hold Jump)' : 'Hold Jump in air to Glide',
+          abilities.isGliding ? 'GLIDING (Hold Jump)' : 'Hold Jump to Glide',
         );
       } else if (hasActiveButtonSpecies) {
         this.abilityStatusText.setVisible(true);
-        if (species === 'triceratops') {
-          this.abilityStatusText.setText('Shift / E / Down: Charge');
-        } else {
-          this.abilityStatusText.setText('Shift / E / Down: Armour');
-        }
+        this.abilityStatusText.setText(
+          species === 'triceratops' ? 'Shift/E/Down: Charge' : 'Shift/E/Down: Armour',
+        );
       } else {
         this.abilityStatusText.setVisible(false);
       }
@@ -789,58 +940,69 @@ export class Game extends Scene {
       this.hudCamera.setZoom(1);
     }
 
-    const hudScale = Math.max(0.8, Math.min(1.2, Math.min(width, height) / 540));
+    const layout = computeHudLayout(width, height, this.lastAbilityVisible);
 
     if (this.scoreText) {
-      this.scoreText.setPosition(width - 18, 16);
-      this.scoreText.setScale(hudScale);
+      this.scoreText.setPosition(layout.score.x, layout.score.y);
+      this.scoreText.setScale(layout.score.scale);
     }
 
     if (this.distanceText) {
-      this.distanceText.setPosition(width - 18, 16 + Math.round(28 * hudScale));
-      this.distanceText.setScale(hudScale);
+      this.distanceText.setPosition(layout.distance.x, layout.distance.y);
+      this.distanceText.setScale(layout.distance.scale);
+    }
+
+    if (this.muteButtonBg && this.muteButtonText) {
+      const m = layout.muteButton;
+      const btnW = Math.round(m.width * m.scale);
+      const btnH = Math.round(m.height * m.scale);
+      this.muteButtonBg.setPosition(m.rightX, m.topY);
+      this.muteButtonBg.setScale(m.scale);
+      this.muteButtonText.setPosition(m.rightX - btnW * 0.5, m.topY + btnH * 0.5);
+      this.muteButtonText.setScale(m.scale);
     }
 
     if (this.speciesText) {
-      this.speciesText.setPosition(18, 16);
-      this.speciesText.setScale(hudScale);
+      this.speciesText.setPosition(layout.species.x, layout.species.y);
+      this.speciesText.setScale(layout.species.scale);
     }
 
     if (this.timerBarBg && this.timerBarFill) {
-      const barY = 16 + Math.round(26 * hudScale);
-      this.timerBarBg.setPosition(18, barY);
-      this.timerBarBg.setScale(hudScale);
-      this.timerBarFill.setPosition(18, barY);
-      this.timerBarFill.setScale(hudScale);
+      this.timerBarBg.setPosition(layout.timerBar.x, layout.timerBar.y);
+      this.timerBarBg.setScale(layout.timerBar.scale);
+      this.timerBarFill.setPosition(layout.timerBar.x, layout.timerBar.y);
+      this.timerBarFill.setScale(layout.timerBar.scale);
     }
 
     if (this.abilityStatusText) {
-      this.abilityStatusText.setPosition(18, 16 + Math.round(42 * hudScale));
-      this.abilityStatusText.setScale(hudScale);
+      this.abilityStatusText.setPosition(
+        layout.abilityStatus.x,
+        layout.abilityStatus.y,
+      );
+      this.abilityStatusText.setScale(layout.abilityStatus.scale);
     }
 
     if (this.abilityButtonBg && this.abilityButtonText) {
-      const btnW = Math.round(148 * hudScale);
-      const btnH = Math.round(44 * hudScale);
-      const btnRight = width - 18;
-      const btnBottom = height - 20;
-      this.abilityButtonBg.setPosition(btnRight, btnBottom);
-      this.abilityButtonBg.setScale(hudScale);
+      const a = layout.abilityButton;
+      const btnW = Math.round(a.width * a.scale);
+      const btnH = Math.round(a.height * a.scale);
+      this.abilityButtonBg.setPosition(a.rightX, a.bottomY);
+      this.abilityButtonBg.setScale(a.scale);
       this.abilityButtonText.setPosition(
-        btnRight - btnW * 0.5,
-        btnBottom - btnH * 0.5,
+        a.rightX - btnW * 0.5,
+        a.bottomY - btnH * 0.5,
       );
-      this.abilityButtonText.setScale(hudScale);
+      this.abilityButtonText.setScale(a.scale);
     }
 
     if (this.envBannerText) {
-      this.envBannerText.setPosition(width / 2, Math.round(height * 0.16));
-      this.envBannerText.setScale(hudScale);
+      this.envBannerText.setPosition(layout.envBanner.x, layout.envBanner.y);
+      this.envBannerText.setScale(layout.envBanner.scale);
     }
 
     if (this.hintText) {
-      this.hintText.setPosition(width / 2, height - 18);
-      this.hintText.setScale(hudScale);
+      this.hintText.setPosition(layout.hint.x, layout.hint.y);
+      this.hintText.setScale(layout.hint.scale);
     }
   }
 }
