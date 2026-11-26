@@ -70,12 +70,12 @@
 ---
 
 ## Phase 7 — Environment and Difficulty System
-**Status:** Pending
-- [ ] Implement four progressive environments: Desert (`0–500 m`), Grasslands (`500–1,200 m`), Jungle (`1,200–2,000 m`), Volcanic Lands (`2,000 m+`).
-- [ ] Implement smooth, non-interrupting environment transitions and independent multi-layer parallax scrolling.
-- [ ] Configure environment-specific obstacle sets.
-- [ ] Implement progressive running speed, spawn frequency adjustment, and capped maximum difficulty.
-- [ ] Add unit tests for distance thresholds, speed caps, and environment transitions.
+**Status:** Completed
+- [x] Implement four progressive environments: Desert (`0–500 m`), Grasslands (`500–1,200 m`), Jungle (`1,200–2,000 m`), Volcanic Lands (`2,000 m+`).
+- [x] Implement smooth, non-interrupting environment transitions and independent multi-layer parallax scrolling.
+- [x] Configure environment-specific obstacle sets.
+- [x] Implement progressive running speed, spawn frequency adjustment, and capped maximum difficulty.
+- [x] Add unit tests for distance thresholds, speed caps, and environment transitions.
 
 ---
 

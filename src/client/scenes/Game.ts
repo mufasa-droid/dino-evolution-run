@@ -8,9 +8,14 @@ import {
 } from '../assets/proceduralTextures.ts';
 import { canActivateSpeciesAbility } from '../game/abilities.ts';
 import { DEFAULT_RUNNER_CONFIG, GROUND_Y } from '../game/constants.ts';
+import {
+  ENVIRONMENT_CONFIGS,
+  lerpEnvironmentPalette,
+} from '../game/environments.ts';
 import { createRunnerState, stepRunnerSimulation } from '../game/simulation.ts';
 import { DINOSAUR_SPECS } from '../game/species.ts';
 import type {
+  EnvironmentPalette,
   EvolutionOrb,
   GameOverData,
   Obstacle,
@@ -38,6 +43,8 @@ export class Game extends Scene {
   private worldCamera: Phaser.Cameras.Scene2D.Camera | null = null;
   private hudCamera: Phaser.Cameras.Scene2D.Camera | null = null;
 
+  private farParallaxTile: Phaser.GameObjects.TileSprite | null = null;
+  private midParallaxTile: Phaser.GameObjects.TileSprite | null = null;
   private groundTile: Phaser.GameObjects.TileSprite | null = null;
   private groundLine: Phaser.GameObjects.Rectangle | null = null;
   private playerSprite: Phaser.GameObjects.Sprite | null = null;
@@ -57,9 +64,16 @@ export class Game extends Scene {
   private abilityButtonBg: Phaser.GameObjects.Rectangle | null = null;
   private abilityButtonText: Phaser.GameObjects.Text | null = null;
   private lastAbilityButtonLabel = '';
+  private envBannerText: Phaser.GameObjects.Text | null = null;
   private hintText: Phaser.GameObjects.Text | null = null;
   private hudObjects: Phaser.GameObjects.GameObject[] = [];
   private worldObjects: Phaser.GameObjects.GameObject[] = [];
+
+  private fromPalette: EnvironmentPalette = ENVIRONMENT_CONFIGS.desert.palette;
+  private targetPalette: EnvironmentPalette = ENVIRONMENT_CONFIGS.desert.palette;
+  private activePalette: EnvironmentPalette = ENVIRONMENT_CONFIGS.desert.palette;
+  private envTransitionProgress = 1;
+  private envBannerTimer = 0;
 
   private jumpQueued = false;
   private jumpHeld = false;
@@ -77,6 +91,8 @@ export class Game extends Scene {
     this.runnerState = createRunnerState(DEFAULT_RUNNER_CONFIG);
     this.worldCamera = null;
     this.hudCamera = null;
+    this.farParallaxTile = null;
+    this.midParallaxTile = null;
     this.groundTile = null;
     this.groundLine = null;
     this.playerSprite = null;
@@ -95,9 +111,15 @@ export class Game extends Scene {
     this.abilityButtonBg = null;
     this.abilityButtonText = null;
     this.lastAbilityButtonLabel = '';
+    this.envBannerText = null;
     this.hintText = null;
     this.hudObjects = [];
     this.worldObjects = [];
+    this.fromPalette = ENVIRONMENT_CONFIGS.desert.palette;
+    this.targetPalette = ENVIRONMENT_CONFIGS.desert.palette;
+    this.activePalette = ENVIRONMENT_CONFIGS.desert.palette;
+    this.envTransitionProgress = 1;
+    this.envBannerTimer = 0;
     this.jumpQueued = false;
     this.jumpHeld = false;
     this.abilityQueued = false;
@@ -114,18 +136,31 @@ export class Game extends Scene {
     }
 
     this.worldCamera = this.cameras.main;
-    this.worldCamera.setBackgroundColor(0xf5efe0);
+    this.worldCamera.setBackgroundColor(this.activePalette.skyColor);
 
     this.hudCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
 
     // World objects (rendered by worldCamera only)
+    this.farParallaxTile = this.add
+      .tileSprite(-400, GROUND_Y, 2400, 160, TEXTURE_KEYS.parallaxFar)
+      .setOrigin(0, 1)
+      .setDepth(-2)
+      .setTint(this.activePalette.farParallaxColor);
+
+    this.midParallaxTile = this.add
+      .tileSprite(-400, GROUND_Y, 2400, 110, TEXTURE_KEYS.parallaxMid)
+      .setOrigin(0, 1)
+      .setDepth(-1)
+      .setTint(this.activePalette.midParallaxColor);
+
     this.groundTile = this.add
       .tileSprite(-400, GROUND_Y, 2400, 600, TEXTURE_KEYS.groundTile)
       .setOrigin(0, 0)
-      .setDepth(0);
+      .setDepth(0)
+      .setTint(this.activePalette.groundTintColor);
 
     this.groundLine = this.add
-      .rectangle(-400, GROUND_Y, 2400, 4, 0x534b3b)
+      .rectangle(-400, GROUND_Y, 2400, 4, this.activePalette.groundLineColor)
       .setOrigin(0, 0)
       .setDepth(1);
 
@@ -148,6 +183,8 @@ export class Game extends Scene {
       .setVisible(false);
 
     this.worldObjects = [
+      this.farParallaxTile,
+      this.midParallaxTile,
       this.groundTile,
       this.groundLine,
       this.playerSprite,
@@ -220,6 +257,18 @@ export class Game extends Scene {
       .setOrigin(0.5, 0.5)
       .setVisible(false);
 
+    this.envBannerText = this.add
+      .text(0, 0, '', {
+        fontFamily: 'Arial Black, sans-serif',
+        fontSize: '18px',
+        color: '#ffffff',
+        backgroundColor: '#2d4a3e',
+        padding: { x: 14, y: 6 },
+        align: 'center',
+      })
+      .setOrigin(0.5, 0)
+      .setVisible(false);
+
     this.hintText = this.add
       .text(0, 0, 'Tap or Press Space to Jump', {
         fontFamily: 'Arial, sans-serif',
@@ -238,6 +287,7 @@ export class Game extends Scene {
       this.abilityStatusText,
       this.abilityButtonBg,
       this.abilityButtonText,
+      this.envBannerText,
       this.hintText,
     ];
 
@@ -363,6 +413,38 @@ export class Game extends Scene {
       this.worldCamera?.shake(110, 0.006);
     }
 
+    if (events.environmentChanged !== null) {
+      this.fromPalette = this.activePalette;
+      this.targetPalette = ENVIRONMENT_CONFIGS[events.environmentChanged].palette;
+      this.envTransitionProgress = 0;
+      if (this.envBannerText) {
+        this.envBannerText.setText(
+          ENVIRONMENT_CONFIGS[events.environmentChanged].displayName.toUpperCase(),
+        );
+        this.envBannerText.setVisible(true);
+        this.envBannerTimer = 2.0;
+      }
+    }
+
+    if (this.envTransitionProgress < 1) {
+      this.envTransitionProgress = Math.min(
+        1,
+        this.envTransitionProgress + dtSeconds / 1.5,
+      );
+      this.activePalette = lerpEnvironmentPalette(
+        this.fromPalette,
+        this.targetPalette,
+        this.envTransitionProgress,
+      );
+    }
+
+    if (this.envBannerTimer > 0) {
+      this.envBannerTimer = Math.max(0, this.envBannerTimer - dtSeconds);
+      if (this.envBannerTimer <= 0 && this.envBannerText) {
+        this.envBannerText.setVisible(false);
+      }
+    }
+
     if (this.transformFlashTimer > 0) {
       this.transformFlashTimer = Math.max(0, this.transformFlashTimer - dtSeconds);
     }
@@ -379,8 +461,25 @@ export class Game extends Scene {
   }
 
   private syncVisuals(state: RunnerState, timeMs: number): void {
+    this.worldCamera?.setBackgroundColor(this.activePalette.skyColor);
+
+    if (this.farParallaxTile) {
+      this.farParallaxTile.tilePositionX = state.groundOffset * 0.12;
+      this.farParallaxTile.setTint(this.activePalette.farParallaxColor);
+    }
+
+    if (this.midParallaxTile) {
+      this.midParallaxTile.tilePositionX = state.groundOffset * 0.35;
+      this.midParallaxTile.setTint(this.activePalette.midParallaxColor);
+    }
+
     if (this.groundTile) {
       this.groundTile.tilePositionX = state.groundOffset;
+      this.groundTile.setTint(this.activePalette.groundTintColor);
+    }
+
+    if (this.groundLine) {
+      this.groundLine.setFillStyle(this.activePalette.groundLineColor);
     }
 
     if (this.playerSprite) {
@@ -593,9 +692,11 @@ export class Game extends Scene {
       sprite.setOrigin(0, 0);
       sprite.setDisplaySize(obs.width, 600);
       sprite.setDepth(2);
+      sprite.setTint(this.activePalette.skyColor);
     } else {
       sprite.setOrigin(0, 1);
       sprite.setScale(1, 1);
+      sprite.clearTint();
       sprite.setDepth(3);
       if (obs.kind === 'bird') {
         sprite.play(ANIMATION_KEYS.birdFlap);
@@ -633,6 +734,9 @@ export class Game extends Scene {
         this.obstacleSprites.set(obs.id, sprite);
       }
       sprite.setPosition(obs.x, obs.y);
+      if (obs.kind === 'gap') {
+        sprite.setTint(this.activePalette.skyColor);
+      }
     }
   }
 
@@ -727,6 +831,11 @@ export class Game extends Scene {
         btnBottom - btnH * 0.5,
       );
       this.abilityButtonText.setScale(hudScale);
+    }
+
+    if (this.envBannerText) {
+      this.envBannerText.setPosition(width / 2, Math.round(height * 0.16));
+      this.envBannerText.setScale(hudScale);
     }
 
     if (this.hintText) {

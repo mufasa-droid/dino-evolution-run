@@ -29,7 +29,8 @@ export class MainMenu extends Scene {
 
     this.groundStrip = this.add
       .tileSprite(0, 0, this.scale.width, 100, TEXTURE_KEYS.groundTile)
-      .setOrigin(0, 0);
+      .setOrigin(0, 0)
+      .setTint(0xe8dfc8);
 
     this.groundLine = this.add
       .rectangle(0, 0, this.scale.width, 4, 0x534b3b)

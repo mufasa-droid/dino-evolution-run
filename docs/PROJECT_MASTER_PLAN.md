@@ -349,7 +349,7 @@ Implement the unique gameplay abilities of each dinosaur.
 
 ## PHASE 7 — ENVIRONMENT AND DIFFICULTY SYSTEM
 
-**Status:** Pending
+**Status:** Completed
 
 ### Objective
 Introduce progressive environments and increasingly challenging gameplay.

@@ -458,5 +458,41 @@ void describe('Phase 4–5 Runner Simulation', () => {
     assert.equal(restarted.abilities.chargeActive, false);
     assert.equal(restarted.abilities.armourActive, false);
     assert.equal(restarted.abilities.isGliding, false);
+    assert.equal(restarted.currentEnvironment, 'desert');
+    assert.equal(restarted.groundOffset, 0);
+  });
+
+  void it('emits environmentChanged once across threshold crossings (including large dt) without interrupting abilities or transformations', () => {
+    const state = createRunnerState(DEFAULT_RUNNER_CONFIG);
+    applySpeciesToPlayer(state.player, 'triceratops');
+    state.transformation.activeSpecies = 'triceratops';
+    state.transformation.remainingSeconds = 6.0;
+    state.distance = 499.6;
+
+    // Activate charge right before crossing 500m with a max-clamped dt (0.05s)
+    const crossEvent = stepRunnerSimulation(
+      state,
+      { jumpPressed: false, abilityPressed: true },
+      0.2,
+    );
+    assert.ok(state.distance >= 500);
+    assert.equal(state.currentEnvironment, 'grasslands');
+    assert.equal(crossEvent.environmentChanged, 'grasslands');
+    assert.equal(crossEvent.abilityActivated, 'charge');
+    assert.equal(state.abilities.chargeActive, true);
+    assert.equal(state.player.species, 'triceratops');
+    assert.ok(state.transformation.remainingSeconds > 5.8);
+
+    // Subsequent step in Grasslands must not re-emit environmentChanged
+    const nextEvent = stepRunnerSimulation(state, { jumpPressed: false }, 0.016);
+    assert.equal(nextEvent.environmentChanged, null);
+
+    // Strict maxSpeed cap at 5,000m+ in Volcanic Lands
+    const lateState = createRunnerState(DEFAULT_RUNNER_CONFIG);
+    lateState.distance = 5000;
+    const lateEvent = stepRunnerSimulation(lateState, { jumpPressed: false }, 0.016);
+    assert.equal(lateState.currentEnvironment, 'volcanic');
+    assert.equal(lateEvent.environmentChanged, 'volcanic');
+    assert.equal(lateState.speed, DEFAULT_RUNNER_CONFIG.maxSpeed);
   });
 });

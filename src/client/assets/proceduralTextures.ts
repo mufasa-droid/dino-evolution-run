@@ -30,6 +30,8 @@ export const TEXTURE_KEYS = {
   lowBranch: 'low-branch',
   groundGap: 'ground-gap',
   groundTile: 'ground-tile',
+  parallaxFar: 'parallax-far',
+  parallaxMid: 'parallax-mid',
 } as const;
 
 export const ANIMATION_KEYS = {
@@ -445,9 +447,9 @@ export function ensureProceduralTextures(scene: Phaser.Scene): void {
     );
 
     gfx.clear();
-    gfx.fillStyle(0xf5efe0, 1);
+    gfx.fillStyle(0xffffff, 1);
     gfx.fillRect(0, 0, 120, 600);
-    gfx.fillStyle(0x534b3b, 1);
+    gfx.fillStyle(0x4a4a4a, 1);
     gfx.fillRect(0, 0, 4, 600);
     gfx.fillRect(116, 0, 4, 600);
     gfx.generateTexture(TEXTURE_KEYS.groundGap, 120, 600);
@@ -455,14 +457,37 @@ export function ensureProceduralTextures(scene: Phaser.Scene): void {
 
   if (!scene.textures.exists(TEXTURE_KEYS.groundTile)) {
     gfx.clear();
-    gfx.fillStyle(0xe8dfc8, 1);
+    gfx.fillStyle(0xffffff, 1);
     gfx.fillRect(0, 0, 128, 100);
-    gfx.fillStyle(0xb5a88d, 1);
+    gfx.fillStyle(0xd4d4d4, 1);
     gfx.fillRect(14, 16, 10, 3);
     gfx.fillRect(52, 28, 6, 3);
     gfx.fillRect(88, 14, 14, 3);
     gfx.fillRect(110, 36, 8, 3);
     gfx.generateTexture(TEXTURE_KEYS.groundTile, 128, 100);
+  }
+
+  // Minimalist tileable far parallax silhouettes (512x160, white for biome tinting)
+  if (!scene.textures.exists(TEXTURE_KEYS.parallaxFar)) {
+    gfx.clear();
+    gfx.fillStyle(0xffffff, 1);
+    gfx.fillTriangle(0, 160, 90, 56, 190, 160);
+    gfx.fillTriangle(140, 160, 260, 34, 380, 160);
+    gfx.fillTriangle(320, 160, 430, 68, 512, 160);
+    gfx.fillRect(0, 142, 512, 18);
+    gfx.generateTexture(TEXTURE_KEYS.parallaxFar, 512, 160);
+  }
+
+  // Minimalist tileable mid parallax silhouettes (512x110, white for biome tinting)
+  if (!scene.textures.exists(TEXTURE_KEYS.parallaxMid)) {
+    gfx.clear();
+    gfx.fillStyle(0xffffff, 1);
+    gfx.fillRect(0, 94, 512, 16);
+    gfx.fillTriangle(20, 94, 70, 42, 125, 94);
+    gfx.fillRect(160, 74, 48, 20);
+    gfx.fillTriangle(240, 94, 305, 36, 370, 94);
+    gfx.fillRect(410, 68, 64, 26);
+    gfx.generateTexture(TEXTURE_KEYS.parallaxMid, 512, 110);
   }
 
   gfx.destroy();

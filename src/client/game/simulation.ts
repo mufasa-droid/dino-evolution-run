@@ -441,6 +441,7 @@ export function stepRunnerSimulation(
         abilityActivated,
         obstacleDestroyed,
         armourBlocked,
+        environmentChanged,
       };
     }
 
@@ -458,5 +459,6 @@ export function stepRunnerSimulation(
     abilityActivated,
     obstacleDestroyed,
     armourBlocked,
+    environmentChanged,
   };
 }
